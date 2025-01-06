@@ -12,7 +12,10 @@ import pandas as pd
 import csv
 from dotenv import load_dotenv
 from apscheduler.schedulers.background import BackgroundScheduler
-import requests
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
+from webdriver_manager.chrome import ChromeDriverManager
 from bs4 import BeautifulSoup
 
 load_dotenv()
@@ -38,36 +41,63 @@ prompt = ChatPromptTemplate.from_template(
 
 def scrape_and_update():
     url = "https://genzmarketing.xyz/"
-    response = requests.get(url)
-    soup = BeautifulSoup(response.content, 'html.parser')
-    titles = [tag.text for tag in soup.find_all('h2')]
-    contents = [p.text for p in soup.find_all('p')]
-    urls = [a['href'] for a in soup.find_all('a', href=True)]
 
-    # Ensure all lists have the same length
-    min_length = min(len(titles), len(contents), len(urls))
-    titles, contents, urls = titles[:min_length], contents[:min_length], urls[:min_length]
+    options = Options()
+    options.headless = True
+    service = Service(ChromeDriverManager().install())
+    driver = webdriver.Chrome(service=service, options=options)
+
+    driver.get(url)
+    soup = BeautifulSoup(driver.page_source, 'html.parser')
+
+    # Extract links to other pages like About Us, Services, etc.
+    links = [a['href'] for a in soup.find_all('a', href=True) if a['href'].startswith('http')]
+    all_titles, all_contents, all_urls = [], [], []
+
+    for link in links:
+        driver.get(link)
+        page_soup = BeautifulSoup(driver.page_source, 'html.parser')
+        titles = [tag.get_text(strip=True) for tag in page_soup.find_all(['h1', 'h2', 'h3'])]
+        contents = [p.get_text(strip=True) for p in page_soup.find_all('p')]
+        additional_texts = [div.get_text(strip=True) for div in page_soup.find_all('div') if len(div.get_text(strip=True)) > 50]
+        contents.extend(additional_texts)
+
+        all_titles.extend(titles)
+        all_contents.extend(contents)
+        all_urls.extend([link] * len(titles))
+
+    driver.quit()
+
+    min_length = min(len(all_titles), len(all_contents), len(all_urls))
+    all_titles, all_contents, all_urls = all_titles[:min_length], all_contents[:min_length], all_urls[:min_length]
 
     data = pd.DataFrame({
-        'title': titles,
-        'url': urls,
-        'content': contents
+        'title': all_titles,
+        'url': all_urls,
+        'content': all_contents
     })
     data.to_csv("genzmarketing_updated.csv", index=False)
+    st.success("Scraped full website data successfully!")
     create_vector_embedding("genzmarketing_updated.csv")
 
-# Preprocess CSV to handle errors
 def preprocess_csv(file_path):
     try:
+        if not os.path.exists(file_path):
+            st.error(f"File not found: {file_path}")
+            st.stop()
         df = pd.read_csv(file_path, quoting=csv.QUOTE_NONE, on_bad_lines='skip')
+        df.dropna(inplace=True)
+
+        # Save and validate file creation
         cleaned_file_path = file_path.replace(".csv", "_cleaned.csv")
         df.to_csv(cleaned_file_path, index=False)
+        if not os.path.exists(cleaned_file_path):
+            raise RuntimeError(f"Failed to save cleaned CSV: {cleaned_file_path}")
         return cleaned_file_path
     except Exception as e:
         st.error(f"Error preprocessing CSV: {e}")
         st.stop()
 
-# Create Vector Embeddings
 def create_vector_embedding(file_path):
     cleaned_file_path = preprocess_csv(file_path)
     st.session_state.loader = CSVLoader(file_path=cleaned_file_path)
@@ -75,13 +105,14 @@ def create_vector_embedding(file_path):
     st.session_state.text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
     st.session_state.final_documents = st.session_state.text_splitter.split_documents(st.session_state.docs)
     st.session_state.vectors = FAISS.from_documents(st.session_state.final_documents, embeddings)
+    st.success("Vector database created successfully!")
 
 # Streamlit UI
 st.title("GenZ Contextual Chatbot: AI-Powered Solution for Accurate and Insightful Query Responses")
 user_prompt = st.text_input("Enter your query from the GenZMarketing website.")
 
 if st.button("Document Embedding"):
-    create_vector_embedding("cleaned_genzmarketing_data.csv")
+    create_vector_embedding("genzmarketing_updated.csv")
 
 if st.button("Scrape and Update Data"):
     scrape_and_update()
@@ -96,7 +127,6 @@ if user_prompt and "vectors" in st.session_state:
         for doc in response['context']:
             st.write(doc.page_content)
 
-# Schedule automatic scraping and updating
 scheduler = BackgroundScheduler()
 scheduler.add_job(scrape_and_update, 'interval', hours=24)
 scheduler.start()

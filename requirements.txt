@@ -20,3 +20,4 @@ faiss-cpu
 langchain_chroma
 duckdb
 apscheduler
+webdriver-manager
