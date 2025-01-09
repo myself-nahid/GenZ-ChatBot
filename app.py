@@ -6,17 +6,23 @@ from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_core.prompts import ChatPromptTemplate
 from langchain.chains import create_retrieval_chain
 from langchain_community.vectorstores import FAISS
-from langchain_community.document_loaders.csv_loader import CSVLoader
+from langchain_community.document_loaders.json_loader import JSONLoader
 from langchain.embeddings import HuggingFaceEmbeddings
 import pandas as pd
-import csv
+import json
 from dotenv import load_dotenv
 from apscheduler.schedulers.background import BackgroundScheduler
+import subprocess
+import scrapy
+from scrapy.crawler import CrawlerProcess
+from scrapy.linkextractors import LinkExtractor
+from scrapy.spiders import CrawlSpider, Rule
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from webdriver_manager.chrome import ChromeDriverManager
-from bs4 import BeautifulSoup
+from scrapy.http import HtmlResponse
+import re
 
 load_dotenv()
 
@@ -30,8 +36,8 @@ llm = ChatGroq(groq_api_key=os.getenv("GROQ_API_KEY"), model_name="Llama3-8b-819
 # Chat Prompt Template
 prompt = ChatPromptTemplate.from_template(
     """
-    Answer the questions based on the provided context only.
-    Please provide the most accurate response based on the question.
+    Use the provided context to answer the question in depth. 
+    Provide detailed explanations and insights based on the content.
     <context>
     {context}
     <context>
@@ -39,87 +45,98 @@ prompt = ChatPromptTemplate.from_template(
     """
 )
 
-def scrape_and_update():
-    url = "https://genzmarketing.xyz/"
 
-    options = Options()
-    options.headless = True
-    service = Service(ChromeDriverManager().install())
-    driver = webdriver.Chrome(service=service, options=options)
+# Web Scraper using Scrapy with Selenium
+class MySpider(CrawlSpider):
+    name = 'my_spider'
+    allowed_domains = ['genzmarketing.xyz']
+    start_urls = ['https://genzmarketing.xyz']
+    custom_settings = {
+        'DOWNLOAD_DELAY': 1,
+        'ROBOTSTXT_OBEY': True,
+        'CONCURRENT_REQUESTS': 10,
+        'LOG_ENABLED': False,
+        'FEED_FORMAT': 'json',
+        'FEED_URI': 'genzmarketing_updated.json',
+        'FEED_EXPORT_ENCODING': 'utf-8'
+    }
+    rules = (
+        Rule(LinkExtractor(), callback='parse_item', follow=True),
+    )
 
-    driver.get(url)
-    soup = BeautifulSoup(driver.page_source, 'html.parser')
+    def parse_item(self, response):
+        options = Options()
+        options.headless = True
+        driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+        driver.get(response.url)
+        html = driver.page_source
+        driver.quit()
+        selenium_response = HtmlResponse(url=response.url, body=html, encoding='utf-8')
 
-    # Extract links to other pages like About Us, Services, etc.
-    links = [a['href'] for a in soup.find_all('a', href=True) if a['href'].startswith('http')]
-    all_titles, all_contents, all_urls = [], [], []
+        url = response.url
+        title = selenium_response.css('title::text').get()
+        content = selenium_response.css('p::text, div::text, span::text').getall()
+        content = [text.strip() for text in content if text.strip()]
 
-    for link in links:
-        driver.get(link)
-        page_soup = BeautifulSoup(driver.page_source, 'html.parser')
-        titles = [tag.get_text(strip=True) for tag in page_soup.find_all(['h1', 'h2', 'h3'])]
-        contents = [p.get_text(strip=True) for p in page_soup.find_all('p')]
-        additional_texts = [div.get_text(strip=True) for div in page_soup.find_all('div') if len(div.get_text(strip=True)) > 50]
-        contents.extend(additional_texts)
+        if content:
+            yield {
+                'url': url,
+                'title': title,
+                'content': content
+            }
+        else:
+            self.logger.warning(f"No content found on {url}")
 
-        all_titles.extend(titles)
-        all_contents.extend(contents)
-        all_urls.extend([link] * len(titles))
-
-    driver.quit()
-
-    min_length = min(len(all_titles), len(all_contents), len(all_urls))
-    all_titles, all_contents, all_urls = all_titles[:min_length], all_contents[:min_length], all_urls[:min_length]
-
-    data = pd.DataFrame({
-        'title': all_titles,
-        'url': all_urls,
-        'content': all_contents
-    })
-    data.to_csv("genzmarketing_updated.csv", index=False)
-    st.success("Scraped full website data successfully!")
-    create_vector_embedding("genzmarketing_updated.csv")
-
-def preprocess_csv(file_path):
+def run_scraper():
     try:
-        if not os.path.exists(file_path):
-            st.error(f"File not found: {file_path}")
-            st.stop()
-        df = pd.read_csv(file_path, quoting=csv.QUOTE_NONE, on_bad_lines='skip')
-        df.dropna(inplace=True)
+        subprocess.run([
+            "scrapy", "crawl", "my_spider"
+        ], cwd="./genzmarketing_spider", check=True)
+        if not os.path.exists('genzmarketing_updated.json'):
+            st.error("Scraping failed or the file was not generated.")
+    except subprocess.CalledProcessError as e:
+        st.error(f"Error running the Scrapy spider: {e}")
 
-        # Save and validate file creation
-        cleaned_file_path = file_path.replace(".csv", "_cleaned.csv")
-        df.to_csv(cleaned_file_path, index=False)
-        if not os.path.exists(cleaned_file_path):
-            raise RuntimeError(f"Failed to save cleaned CSV: {cleaned_file_path}")
-        return cleaned_file_path
-    except Exception as e:
-        st.error(f"Error preprocessing CSV: {e}")
-        st.stop()
+# Data Cleaning Function
+def clean_content(content):
+    full_content = ' '.join(content)
+    cleaned_content = re.sub(r'^Skip to:', '', full_content)
+    cleaned_content = re.sub(r'\|\s*(\|\s*)+', ' ', cleaned_content)
+    cleaned_content = re.sub(r'\s+', ' ', cleaned_content)
+    cleaned_content = re.sub(r'\s([?.!,"](?:\s|$))', r'\1', cleaned_content)
+    return cleaned_content.strip()
 
 def create_vector_embedding(file_path):
-    cleaned_file_path = preprocess_csv(file_path)
-    st.session_state.loader = CSVLoader(file_path=cleaned_file_path)
-    st.session_state.docs = st.session_state.loader.load()
-    st.session_state.text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
-    st.session_state.final_documents = st.session_state.text_splitter.split_documents(st.session_state.docs)
-    st.session_state.vectors = FAISS.from_documents(st.session_state.final_documents, embeddings)
-    st.success("Vector database created successfully!")
+    if not os.path.exists(file_path):
+        st.error(f"File not found: {file_path}")
+        st.stop()
+
+    try:
+        # Fixed with text_content=False for proper JSON parsing
+        jq_schema = ".[]"
+        st.session_state.loader = JSONLoader(file_path=file_path, jq_schema=jq_schema, text_content=False)
+        st.session_state.docs = st.session_state.loader.load()
+        st.session_state.text_splitter = RecursiveCharacterTextSplitter(chunk_size=2000, chunk_overlap=500)
+        st.session_state.final_documents = st.session_state.text_splitter.split_documents(st.session_state.docs)
+        st.session_state.vectors = FAISS.from_documents(st.session_state.final_documents, embeddings)
+        st.success("Vector database created successfully!")
+    except Exception as e:
+        st.error(f"Error loading JSON file: {e}")
 
 # Streamlit UI
 st.title("GenZ Contextual Chatbot: AI-Powered Solution for Accurate and Insightful Query Responses")
 user_prompt = st.text_input("Enter your query from the GenZMarketing website.")
 
-if st.button("Document Embedding"):
-    create_vector_embedding("genzmarketing_updated.csv")
-
 if st.button("Scrape and Update Data"):
-    scrape_and_update()
+    run_scraper()
+    if os.path.exists("genzmarketing_updated.json"):
+        create_vector_embedding("genzmarketing_updated.json")
+    else:
+        st.error("Scraping failed or the file was not generated.")
 
 if user_prompt and "vectors" in st.session_state:
     document_chain = create_stuff_documents_chain(llm, prompt)
-    retriever = st.session_state.vectors.as_retriever()
+    retriever = st.session_state.vectors.as_retriever(search_kwargs={"k": 5})
     retrieval_chain = create_retrieval_chain(retriever, document_chain)
     response = retrieval_chain.invoke({'input': user_prompt})
     st.write(response['answer'])
@@ -128,5 +145,5 @@ if user_prompt and "vectors" in st.session_state:
             st.write(doc.page_content)
 
 scheduler = BackgroundScheduler()
-scheduler.add_job(scrape_and_update, 'interval', hours=24)
+scheduler.add_job(run_scraper, 'interval', hours=24)
 scheduler.start()

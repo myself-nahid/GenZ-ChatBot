@@ -21,3 +21,5 @@ langchain_chroma
 duckdb
 apscheduler
 webdriver-manager
+scrapy
+jq
