@@ -1,85 +1,64 @@
-# GenZ-ChatBot
-This project implements a contextual chatbot capable of answering user queries using data scraped from the GenZMarketing website. The chatbot leverages Streamlit, LangChain, FAISS, HuggingFace Embeddings, and ChatGroq for data retrieval and contextual understanding.
+# GenZ Contextual Chatbot
+
+## Project Overview
+The GenZ Contextual Chatbot is an AI-powered solution designed to answer user queries by scraping data from the GenZMarketing website, processing it into vector embeddings, and retrieving the most accurate responses using a LangChain-powered LLM.
 
 ## Features
+- **Data Scraping:** The system uses Scrapy with Selenium to scrape dynamic content from the GenZMarketing website.
+- **Data Processing:** The scraped data is cleaned and stored as a JSON file for further processing.
+- **Vector Embeddings:** The system uses FAISS and HuggingFace embeddings to create searchable vector databases.
+- **Contextual Question Answering:** LangChain is used to retrieve the most relevant context and generate insightful responses.
+- **Automated Updates:** The scraper runs periodically using APScheduler to ensure the data remains up-to-date.
 
-- Web-based Interface: Built using Streamlit for a user-friendly experience.
+## Technologies Used
+- **Python** (Streamlit, Pandas, JSON)  
+- **Scrapy** (for web scraping)  
+- **Selenium** (for dynamic content extraction)  
+- **LangChain** (for language model interaction)  
+- **FAISS** (for vector database storage)  
+- **HuggingFace Embeddings**  
 
-- Data Preprocessing: Handles CSV data with error handling.
+## How It Works
+1. **Scraping:** The Scrapy spider with Selenium extracts the entire website content, including dynamic data.  
+2. **Processing:** The scraped data is stored in a JSON file and cleaned using a data cleaning function.  
+3. **Embedding:** The cleaned data is converted into vector embeddings using FAISS and HuggingFace.  
+4. **Query Handling:** User queries are compared against the vector database, and the most relevant documents are retrieved.  
+5. **Answer Generation:** The LangChain-powered LLM generates detailed answers based on the retrieved documents.
 
-- Vector Embeddings: Utilizes HuggingFace's all-MiniLM-L6-v2 for text vectorization.
+## Project Setup
+1. **Clone the Repository:**
+   ```bash
+   git clone https://github.com/myself-nahid/GenZ-ChatBot.git
+   cd GenZ-ChatBot
+   ```
+2. **Install Requirements:**
+   ```bash
+   pip install -r requirements.txt
+   ```
+3. **Set Up Environment Variables:**
+   - Create a `.env` file with the following keys:
+     ```plaintext
+     GROQ_API_KEY=your_groq_api_key
+     HF_TOKEN=your_huggingface_token
+     ```
+4. **Run the Application:**
+   ```bash
+   streamlit run app.py
+   ```
 
-- Vector Database: FAISS is used for efficient similarity searches.
-
-- Language Model Integration: ChatGroq LLM for generating context-based responses.
-
-- Document Splitting: Recursive character splitting for better vectorization and retrieval.
-
-## Project Structure
-```
-├── main.py  # Streamlit App and Core Logic
-├── cleaned_genzmarketing_data.csv  # Preprocessed CSV Data
-├── .env  # Environment Variables
-├── requirements.txt  # Dependencies
-└── README.md  # Project Documentation
-```
-## Requirements
-
-- Python 3.8+
-
-- Libraries: streamlit, langchain, faiss-cpu, huggingface_hub, pandas
-
-## Setup Instructions
-
-1. Clone the Repository:
-```
-git clone https://github.com/myself-nahid/GenZ-ChatBot.git
-cd GenZ-ChatBot
-```
-2. Install Dependencies:
-```
-pip install -r requirements.txt
-```
-3. Set Environment Variables:
-Create a .env file with the following:
-```
-GROQ_API_KEY=your_api_key
-HF_TOKEN=your_huggingface_token
-```
-4. Run the Application:
-```
-streamlit run app.py
-```
 ## Usage
-
-- Click the Document Embedding button to create vector embeddings.
-
-- Enter a query in the input box and receive a context-based answer.
-
-## Key Components
-
-- Data Preprocessing: Cleans the CSV file before vectorization.
-
-- Vector Storage: FAISS for efficient document storage and retrieval.
-
-- LLM Integration: ChatGroq for generating responses.
-
-- Embeddings: HuggingFace's all-MiniLM-L6-v2 for vectorization.
+- **Scrape Website Data:** Click the `Scrape and Update Data` button.
+- **Ask Questions:** Enter your query in the input field, and the chatbot will provide an insightful response based on the website content.
 
 ## Troubleshooting
+- **Scrapy Errors:** Ensure the working directory is correctly set and dependencies are installed.
+- **Incomplete Answers:** Increase the document chunk size and overlap for better query handling.
 
-- Ensure the .env file is correctly set up.
-
-- Run pip install -r requirements.txt if modules are missing.
+## Future Improvements
+- Add multilingual support.
+- Implement more advanced language models for deeper context understanding.
+- Enable real-time website monitoring for data changes.
 
 ## License
+This project is licensed under the MIT License.
 
-- This project is licensed under the MIT License.
-
-## Acknowledgments
-
-- HuggingFace for the embedding model.
-
-- LangChain for the retriever framework.
-
-- FAISS for vector storage.
