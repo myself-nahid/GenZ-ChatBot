@@ -55,9 +55,10 @@ The GenZ Contextual Chatbot is an AI-powered solution designed to answer user qu
 - **Incomplete Answers:** Increase the document chunk size and overlap for better query handling.
 
 ## Future Improvements
-- Add multilingual support.
+- Add multilanguage support.
 - Implement more advanced language models for deeper context understanding.
 - Enable real-time website monitoring for data changes.
+- Add Speech Output Integration in Chatbot.
 
 ## License
 This project is licensed under the MIT License.
