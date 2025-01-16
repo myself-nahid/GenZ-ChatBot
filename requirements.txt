@@ -23,3 +23,5 @@ apscheduler
 webdriver-manager
 scrapy
 jq
+pyttsx3
+gtts

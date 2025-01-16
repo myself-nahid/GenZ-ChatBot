@@ -23,8 +23,22 @@ from selenium.webdriver.chrome.options import Options
 from webdriver_manager.chrome import ChromeDriverManager
 from scrapy.http import HtmlResponse
 import re
+from gtts import gTTS
+import tempfile
 
 load_dotenv()
+
+# Speech output function using gTTS for Streamlit compatibility
+def speak_text(text):
+    try:
+        tts = gTTS(text=text, lang='en')
+        temp_file = tempfile.NamedTemporaryFile(delete=False)
+        temp_file_path = temp_file.name + ".mp3"
+        tts.save(temp_file_path)
+        st.audio(temp_file_path, format="audio/mp3", start_time=0)
+        os.remove(temp_file_path)  # Clean up after playing
+    except Exception as e:
+        st.error(f"Error with speech output: {e}")
 
 # Set environment variables
 os.environ['GROQ_API_KEY'] = os.getenv("GROQ_API_KEY")
@@ -36,15 +50,14 @@ llm = ChatGroq(groq_api_key=os.getenv("GROQ_API_KEY"), model_name="Llama3-8b-819
 # Chat Prompt Template
 prompt = ChatPromptTemplate.from_template(
     """
-    Use the provided context to answer the question in depth. 
-    Provide detailed explanations and insights based on the content.
+    Answer the questions based on the provided context only.
+    Please provide the most accurate response based on the question.
     <context>
     {context}
     <context>
     Question: {input}
     """
 )
-
 
 # Web Scraper using Scrapy with Selenium
 class MySpider(CrawlSpider):
@@ -112,11 +125,10 @@ def create_vector_embedding(file_path):
         st.stop()
 
     try:
-        # Fixed with text_content=False for proper JSON parsing
         jq_schema = ".[]"
         st.session_state.loader = JSONLoader(file_path=file_path, jq_schema=jq_schema, text_content=False)
         st.session_state.docs = st.session_state.loader.load()
-        st.session_state.text_splitter = RecursiveCharacterTextSplitter(chunk_size=2000, chunk_overlap=500)
+        st.session_state.text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
         st.session_state.final_documents = st.session_state.text_splitter.split_documents(st.session_state.docs)
         st.session_state.vectors = FAISS.from_documents(st.session_state.final_documents, embeddings)
         st.success("Vector database created successfully!")
@@ -134,16 +146,19 @@ if st.button("Scrape and Update Data"):
     else:
         st.error("Scraping failed or the file was not generated.")
 
+if "scheduler" not in st.session_state:
+    scheduler = BackgroundScheduler()
+    scheduler.add_job(run_scraper, 'interval', hours=24)
+    scheduler.start()
+    st.session_state["scheduler"] = scheduler
+
 if user_prompt and "vectors" in st.session_state:
     document_chain = create_stuff_documents_chain(llm, prompt)
     retriever = st.session_state.vectors.as_retriever(search_kwargs={"k": 5})
     retrieval_chain = create_retrieval_chain(retriever, document_chain)
     response = retrieval_chain.invoke({'input': user_prompt})
     st.write(response['answer'])
+    speak_text(response['answer'])
     with st.expander("Document Similarity Search"):
         for doc in response['context']:
             st.write(doc.page_content)
-
-scheduler = BackgroundScheduler()
-scheduler.add_job(run_scraper, 'interval', hours=24)
-scheduler.start()
