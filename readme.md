@@ -50,6 +50,9 @@ The GenZ Contextual Chatbot is an AI-powered solution designed to answer user qu
 - **Scrape Website Data:** Click the `Scrape and Update Data` button.
 - **Ask Questions:** Enter your query in the input field, and the chatbot will provide an insightful response based on the website content.
 
+## Demos
+- [result01](https://drive.google.com/file/d/16G0BqxRFjN3WZK_HRQ4ISx8pgOCaNMM_/view?usp=drive_link)
+
 ## Troubleshooting
 - **Scrapy Errors:** Ensure the working directory is correctly set and dependencies are installed.
 - **Incomplete Answers:** Increase the document chunk size and overlap for better query handling.
