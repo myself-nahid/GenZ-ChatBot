@@ -9,6 +9,7 @@ The GenZ Contextual Chatbot is an AI-powered solution designed to answer user qu
 - **Vector Embeddings:** The system uses FAISS and HuggingFace embeddings to create searchable vector databases.
 - **Contextual Question Answering:** LangChain is used to retrieve the most relevant context and generate insightful responses.
 - **Automated Updates:** The scraper runs periodically using APScheduler to ensure the data remains up-to-date.
+- **Speech Output Integration:** Add Speech Output Integration in Chatbot.
 
 ## Technologies Used
 - **Python** (Streamlit, Pandas, JSON)  
@@ -61,7 +62,6 @@ The GenZ Contextual Chatbot is an AI-powered solution designed to answer user qu
 - Add multilanguage support.
 - Implement more advanced language models for deeper context understanding.
 - Enable real-time website monitoring for data changes.
-- Add Speech Output Integration in Chatbot.
 
 ## License
 This project is licensed under the MIT License.
