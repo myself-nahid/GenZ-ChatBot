@@ -53,6 +53,7 @@ The GenZ Contextual Chatbot is an AI-powered solution designed to answer user qu
 
 ## Demos
 - [result01](https://drive.google.com/file/d/16G0BqxRFjN3WZK_HRQ4ISx8pgOCaNMM_/view?usp=drive_link)
+- [result02](https://drive.google.com/file/d/16DZqbMzLma06Z8g2cI4WqFLLBAkOvNAW/view?usp=drive_link)
 
 ## Troubleshooting
 - **Scrapy Errors:** Ensure the working directory is correctly set and dependencies are installed.
